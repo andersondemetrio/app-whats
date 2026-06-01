@@ -91,4 +91,3 @@ Passo 5 — Sender ativado ✅
 O free tier "dorme" após 15 minutos sem uso e leva ~30s para acordar.
 Para uso interno esporádico isso é aceitável.
 Para uso constante, o plano Starter custa $7/mês e mantém o servidor sempre ativo.
-"# app-whats" 
