@@ -415,6 +415,7 @@ const TOTAL_STEPS = 5;
 async function loadServerInfo() {
   try {
     const res  = await fetch('/api/server-info');
+    if (res.status === 401) { window.location.href = '/'; return; }
     const data = await res.json();
     if (data.publicUrl) {
       document.getElementById('serverUrlDisplay').textContent = data.publicUrl;
