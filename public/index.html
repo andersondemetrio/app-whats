@@ -412,17 +412,6 @@ let pollSeconds = 0;
 const TOTAL_STEPS = 5;
 
 // ── Carrega URL pública do servidor ──────────────────────────────────────────
-async function loadServerInfo() {
-  try {
-    const res  = await fetch('/api/server-info');
-    if (res.status === 401) { window.location.href = '/'; return; }
-    const data = await res.json();
-    if (data.publicUrl) {
-      document.getElementById('serverUrlDisplay').textContent = data.publicUrl;
-    }
-  } catch(e) {}
-}
-
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function doLogout() {
   await fetch('/api/logout', { method: 'POST' });
@@ -706,8 +695,18 @@ function resetAll() {
 // ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
-updateProgress(1);
-loadServerInfo();
+// Verifica sessão antes de qualquer coisa — evita loop de redirect
+(async () => {
+  try {
+    const res = await fetch('/api/server-info');
+    if (res.status === 401) { window.location.replace('/login'); return; }
+    const data = await res.json();
+    if (data.publicUrl) {
+      document.getElementById('serverUrlDisplay').textContent = data.publicUrl;
+    }
+  } catch(e) {}
+  updateProgress(1);
+})();
 </script>
 </body>
 </html>
