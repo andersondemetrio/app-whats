@@ -65,6 +65,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(requireAuth);
 
+// ── Login page ────────────────────────────────────────────────────────────────
+app.get('/login', (req, res) => {
+  if (req.session?.authenticated) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
