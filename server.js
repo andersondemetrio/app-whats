@@ -8,6 +8,9 @@ const path     = require('path');
 const app  = express();
 const PORT = parseInt(process.env.PORT || '3000');
 
+// Informa ao Express que está atrás do proxy do Render (necessário para cookies HTTPS)
+app.set('trust proxy', 1);
+
 // ── URL pública (Render injeta automaticamente em produção) ───────────────────
 function getPublicUrl() {
   const host = process.env.RENDER_EXTERNAL_URL;
@@ -56,10 +59,11 @@ function requireAuth(req, res, next) {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 }
 
-app.use(requireAuth);
-
-// Servir arquivos estáticos (após o middleware de auth)
+// Arquivos estáticos ficam ANTES do requireAuth — senão o CSS/JS do app
+// ficaria bloqueado para usuários não autenticados, causando loop infinito
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(requireAuth);
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
