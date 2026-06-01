@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twilio WA Verificação</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1a2234;
+    --border: #1e2d47; --accent: #3b82f6; --accent-glow: rgba(59,130,246,0.15);
+    --green: #10b981; --green-dim: rgba(16,185,129,0.1);
+    --red: #ef4444; --red-dim: rgba(239,68,68,0.1);
+    --yellow: #f59e0b; --yellow-dim: rgba(245,158,11,0.1);
+    --text: #e2e8f0; --text-dim: #64748b; --text-mid: #94a3b8;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 32px 16px 80px;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.08) 0%, transparent 70%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
+  }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    width: 100%; max-width: 760px; display: flex;
+    justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .server-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-dim); border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 4px; padding: 5px 12px; font-family: var(--mono);
+    font-size: 11px; color: var(--green);
+  }
+  .server-badge::before { content: '●'; font-size: 8px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .server-url { font-size: 11px; color: var(--text-dim); font-family: var(--mono); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-logout { background: transparent; border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--sans); transition: all 0.2s; }
+  .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── HEADER ── */
+  .header { width: 100%; max-width: 760px; margin-bottom: 32px; }
+  .header-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 4px; padding: 4px 10px; font-family: var(--mono);
+    font-size: 11px; color: var(--accent); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+  .header-badge::before { content: '◉'; font-size: 9px; }
+  h1 { font-size: clamp(22px,4vw,32px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px; }
+  h1 span { color: var(--accent); }
+  .header-sub { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+
+  /* ── PROGRESS ── */
+  .progress-wrap { width: 100%; max-width: 760px; margin-bottom: 32px; }
+  .progress-steps { display: flex; position: relative; }
+  .progress-steps::before { content:''; position:absolute; top:16px; left:16px; right:16px; height:2px; background:var(--border); z-index:0; }
+  .progress-line { position:absolute; top:16px; left:16px; height:2px; background:var(--accent); z-index:1; transition:width 0.5s cubic-bezier(0.4,0,0.2,1); box-shadow:0 0 8px var(--accent); }
+  .step-dot-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; z-index:2; }
+  .step-dot { width:32px; height:32px; border-radius:50%; border:2px solid var(--border); background:var(--bg); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:600; color:var(--text-dim); transition:all 0.3s; }
+  .step-dot.active { border-color:var(--accent); background:var(--accent); color:white; box-shadow:0 0 16px rgba(59,130,246,0.4); }
+  .step-dot.done { border-color:var(--green); background:var(--green); color:white; }
+  .step-dot.done::after { content:'✓'; font-size:14px; }
+  .step-label { font-size:10px; color:var(--text-dim); text-align:center; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; max-width:80px; line-height:1.3; transition:color 0.3s; }
+  .step-dot-wrap.active .step-label { color:var(--accent); }
+  .step-dot-wrap.done   .step-label { color:var(--green); }
+
+  /* ── CARD ── */
+  .card { width:100%; max-width:760px; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; animation:slideIn 0.4s cubic-bezier(0.4,0,0.2,1); }
+  @keyframes slideIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .card-header { padding:24px 28px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:14px; background:var(--surface2); }
+  .card-icon { width:42px; height:42px; border-radius:8px; background:var(--accent-glow); border:1px solid rgba(59,130,246,0.3); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .card-header-text h2 { font-size:16px; font-weight:700; }
+  .card-header-text p  { font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .card-body { padding:28px; }
+
+  /* ── FORM ── */
+  .field { margin-bottom:20px; }
+  .field label { display:block; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-mid); margin-bottom:8px; }
+  .field label .req { color:var(--accent); margin-left:2px; }
+  .field-hint { font-size:11px; color:var(--text-dim); margin-top:5px; line-height:1.5; }
+  input[type=text], input[type=password] {
+    width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px;
+    padding:11px 14px; font-family:var(--mono); font-size:13px; color:var(--text);
+    outline:none; transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,0.12); }
+  input.error   { border-color:var(--red)   !important; }
+  input.success { border-color:var(--green) !important; }
+  .toggle-pass { position:relative; }
+  .toggle-pass input { padding-right:44px; }
+  .toggle-pass button { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:14px; }
+  .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:540px){ .row-2{ grid-template-columns:1fr; } }
+
+  /* ── CALLOUTS ── */
+  .callout { border-radius:6px; padding:12px 16px; font-size:13px; line-height:1.6; margin-bottom:20px; display:flex; gap:10px; align-items:flex-start; }
+  .callout-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+  .callout.info      { background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); }
+  .callout.success   { background:var(--green-dim);      border:1px solid rgba(16,185,129,0.25); color:#6ee7b7; }
+  .callout.error-box { background:var(--red-dim);        border:1px solid rgba(239,68,68,0.25);  color:#fca5a5; }
+  .callout.warning   { background:var(--yellow-dim);     border:1px solid rgba(245,158,11,0.25); color:#fde68a; }
+
+  /* ── BUTTONS ── */
+  .btn-group { display:flex; gap:10px; justify-content:flex-end; margin-top:28px; padding-top:20px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  button.btn { padding:10px 22px; border-radius:6px; font-family:var(--sans); font-size:13px; font-weight:700; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:7px; transition:all 0.2s; }
+  button.btn:disabled { opacity:0.4; cursor:not-allowed; }
+  button.btn-primary { background:var(--accent); color:white; box-shadow:0 2px 12px rgba(59,130,246,0.3); }
+  button.btn-primary:hover:not(:disabled) { background:#2563eb; transform:translateY(-1px); }
+  button.btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border); }
+  button.btn-ghost:hover:not(:disabled) { border-color:var(--text-mid); color:var(--text); }
+  button.btn-success { background:var(--green); color:white; box-shadow:0 2px 12px rgba(16,185,129,0.3); }
+  button.btn-success:hover:not(:disabled) { background:#059669; transform:translateY(-1px); }
+
+  /* ── SPINNER ── */
+  .spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
+  .spinner-yellow { border-color:rgba(245,158,11,0.3); border-top-color:var(--yellow); }
+  .spinner-blue   { border-color:rgba(59,130,246,0.3);  border-top-color:var(--accent); }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ── SECTION TITLE ── */
+  .section-title { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* ── WEBHOOK STATUS ── */
+  .webhook-status { display:flex; align-items:center; gap:10px; padding:14px 16px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); margin-bottom:20px; }
+  .webhook-status p { font-size:13px; line-height:1.5; }
+  .webhook-status.ok { border-color:rgba(16,185,129,0.3); background:var(--green-dim); }
+
+  /* ── API RESPONSE ── */
+  .api-response { background:#060a14; border:1px solid var(--border); border-radius:6px; padding:14px 16px; margin-top:16px; font-family:var(--mono); font-size:12px; color:var(--green); display:none; white-space:pre-wrap; word-break:break-all; line-height:1.7; max-height:200px; overflow-y:auto; }
+  .api-response.error-response { color:var(--red); }
+  .api-response.visible { display:block; }
+
+  /* ── RECORDING PLAYER ── */
+  .recording-player { background:#060a14; border:1px solid rgba(16,185,129,0.25); border-left:3px solid var(--green); border-radius:6px; padding:14px 16px; margin-bottom:12px; }
+  .recording-player-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .recording-label { font-size:12px; font-weight:700; color:var(--green); }
+  .recording-meta  { font-size:11px; color:var(--text-dim); }
+  .recording-player audio { width:100%; height:36px; accent-color:var(--green); }
+
+  /* ── WAITING POLL ── */
+  .poll-waiting { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--yellow-dim); border:1px solid rgba(245,158,11,0.2); border-radius:6px; margin-bottom:16px; }
+  .poll-waiting p { font-size:13px; color:#fde68a; }
+  .poll-timer { font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:3px; }
+
+  /* ── SUCCESS ── */
+  .success-screen { text-align:center; padding:20px 0; }
+  .success-icon { font-size:64px; margin-bottom:16px; animation:popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275); }
+  @keyframes popIn { from{transform:scale(0.5);opacity:0} to{transform:scale(1);opacity:1} }
+  .success-screen h2 { font-size:24px; margin-bottom:8px; }
+  .success-screen p { color:var(--text-dim); font-size:14px; line-height:1.6; }
+  .divider { border:none; border-top:1px solid var(--border); margin:24px 0; }
+  .status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; }
+  .status-badge::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .badge-approved { background:var(--green-dim); color:var(--green); border:1px solid rgba(16,185,129,0.3); }
+  .badge-offline  { background:var(--red-dim);   color:var(--red);   border:1px solid rgba(239,68,68,0.3); }
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<div class="top-bar">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span class="server-badge">Servidor Online</span>
+    <span class="server-url" id="serverUrlDisplay">carregando...</span>
+  </div>
+  <button class="btn-logout" onclick="doLogout()">Sair →</button>
+</div>
+
+<div class="header">
+  <div class="header-badge">Twilio · WhatsApp Sender</div>
+  <h1>Ativar número <span>Online</span> no WhatsApp</h1>
+  <p class="header-sub">Assistente passo a passo — webhook configurado automaticamente, sem túnel local.</p>
+</div>
+
+<!-- PROGRESS -->
+<div class="progress-wrap">
+  <div class="progress-steps">
+    <div class="progress-line" id="progressLine" style="width:0%"></div>
+    <div class="step-dot-wrap" id="sw0"><div class="step-dot active" id="sd0">1</div><span class="step-label">Credenciais</span></div>
+    <div class="step-dot-wrap" id="sw1"><div class="step-dot" id="sd1">2</div><span class="step-label">Webhook Auto</span></div>
+    <div class="step-dot-wrap" id="sw2"><div class="step-dot" id="sd2">3</div><span class="step-label">Solicitar Código</span></div>
+    <div class="step-dot-wrap" id="sw3"><div class="step-dot" id="sd3">4</div><span class="step-label">Confirmar Código</span></div>
+    <div class="step-dot-wrap" id="sw4"><div class="step-dot" id="sd4">5</div><span class="step-label">Concluído</span></div>
+  </div>
+</div>
+
+<div class="card" id="mainCard">
+
+  <!-- ═══ STEP 1 ═══ -->
+  <div id="step1">
+    <div class="card-header">
+      <div class="card-icon">🔑</div>
+      <div class="card-header-text">
+        <h2>Credenciais da Conta</h2>
+        <p>Preencha os dados da Twilio para iniciar o processo</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="callout info">
+        <span class="callout-icon">☁️</span>
+        <span>Esta versão roda na nuvem — <strong>sem tunnel local, sem cloudflared</strong>. O webhook é configurado automaticamente com a URL permanente do servidor.</span>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Account SID <span class="req">*</span></label>
+          <input type="text" id="accountSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+          <p class="field-hint">Dashboard da Twilio — começa com "AC"</p>
+        </div>
+        <div class="field">
+          <label>Auth Token <span class="req">*</span></label>
+          <div class="toggle-pass">
+            <input type="password" id="authToken" placeholder="••••••••••••••••••••••••••••••••">
+            <button type="button" onclick="togglePass('authToken',this)">👁</button>
+          </div>
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Número WhatsApp <span class="req">*</span></label>
+          <input type="text" id="waNumber" placeholder="+5511999999999" oninput="formatWaNumber(this)">
+          <p class="field-hint">Formato E.164 — ex: +5511999999999</p>
+        </div>
+        <div class="field">
+          <label>Nome do Sender <span class="req">*</span></label>
+          <input type="text" id="senderName" placeholder="Ex: Ferreira Costa Entregas">
+        </div>
+      </div>
+      <div id="step1Error" class="callout error-box" style="display:none;">
+        <span class="callout-icon">⚠️</span><span id="step1ErrorMsg"></span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="goStep2()">Próximo — Configurar Webhook →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 2 ═══ -->
+  <div id="step2" style="display:none">
+    <div class="card-header">
+      <div class="card-icon">🔗</div>
+      <div class="card-header-text">
+        <h2>Configurar Webhook de Gravação</h2>
+        <p>Configuração automática via API da Twilio</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="webhookConfiguring" class="webhook-status" style="display:flex;">
+        <span class="spinner spinner-blue" style="width:18px;height:18px;flex-shrink:0;"></span>
+        <p>Configurando webhook no número <strong id="waNumDisplay2" style="color:var(--accent)"></strong>...</p>
+      </div>
+      <div id="webhookSuccess" class="webhook-status ok" style="display:none;">
+        <span style="font-size:20px;flex-shrink:0;">✅</span>
+        <div>
+          <p style="font-weight:700;color:var(--green);">Webhook configurado com sucesso!</p>
+          <p style="font-size:12px;color:var(--text-dim);margin-top:3px;">Voice URL: <code id="webhookUrlDisplay" style="font-family:var(--mono);color:var(--green);font-size:11px;word-break:break-all;"></code></p>
+        </div>
+      </div>
+      <div id="webhookError" class="callout error-box" style="display:none;margin-bottom:0;">
+        <span class="callout-icon">⚠️</span><span id="webhookErrorMsg"></span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Voltar</button>
+        <button class="btn btn-ghost" id="btnRetryWebhook" onclick="configureWebhook()" style="display:none;color:var(--yellow);border-color:rgba(245,158,11,0.4);">↺ Tentar novamente</button>
+        <button class="btn btn-primary" id="btnNextStep3" onclick="goStep(3)" disabled>Próximo →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 3 ═══ -->
+  <div id="step3" style="display:none">
+    <div class="card-header">
+      <div class="card-icon">📞</div>
+      <div class="card-header-text">
+        <h2>Solicitar Código de Verificação</h2>
+        <p>A Twilio ligará para o número e ditará o código</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="callout info">
+        <span class="callout-icon">📱</span>
+        <span>Ao clicar em <strong>Enviar Solicitação</strong>, o WhatsApp ligará para o número. A gravação aparecerá automaticamente no próximo passo.</span>
+      </div>
+      <div class="section-title">Payload</div>
+      <div style="background:#060a14;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+        <pre style="font-family:var(--mono);font-size:12px;color:#a5b4fc;white-space:pre-wrap;">{
+  "sender_id": "whatsapp:<span id="prevWa" style="color:#fbbf24">+55...</span>",
+  "configuration": { "verification_method": "voice" },
+  "profile": { "name": "<span id="prevName" style="color:#86efac">...</span>" }
+}</pre>
+      </div>
+      <div id="step3Response" class="api-response"></div>
+      <div id="step3Error" class="callout error-box" style="display:none;margin-top:12px;">
+        <span class="callout-icon">⚠️</span><span id="step3ErrorMsg"></span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="goStep(2)">← Voltar</button>
+        <button class="btn btn-primary" id="btnSendRequest" onclick="sendVerificationRequest()">📞 Enviar Solicitação</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 4 ═══ -->
+  <div id="step4" style="display:none">
+    <div class="card-header">
+      <div class="card-icon">✉️</div>
+      <div class="card-header-text">
+        <h2>Confirmar Código de Verificação</h2>
+        <p>Ouça a gravação e informe o código de 6 dígitos</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="callout success">
+        <span class="callout-icon">✅</span>
+        <span>Solicitação enviada! A gravação aparecerá abaixo assim que a ligação terminar (pode levar ~1 minuto).</span>
+      </div>
+      <div class="section-title">Gravação da Ligação</div>
+      <div id="recordingWaiting" class="poll-waiting">
+        <span class="spinner spinner-yellow" style="width:18px;height:18px;flex-shrink:0;"></span>
+        <div>
+          <p>Aguardando a ligação de verificação...</p>
+          <p class="poll-timer">Verificando a cada 3 segundos · <span id="pollTimer">0s</span> decorridos</p>
+        </div>
+      </div>
+      <div id="recordingsContainer"></div>
+      <div id="noRecordingWarning" class="callout warning" style="display:none;margin-top:4px;">
+        <span class="callout-icon">⚠️</span>
+        <span>Nenhuma gravação após 90s. Verifique o Console da Twilio em <strong>Monitor → Logs → Calls</strong> para ver se a ligação ocorreu.</span>
+      </div>
+      <div class="section-title" style="margin-top:24px;">Código XE do Sender</div>
+      <div class="field">
+        <label>Código XE <span class="req">*</span></label>
+        <input type="text" id="xeCode" placeholder="XExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+        <p class="field-hint">Preenchido automaticamente após a solicitação. Caso contrário, copie da URL em <strong>Messaging → WhatsApp Senders</strong>.</p>
+      </div>
+      <div class="section-title">Código Recebido na Ligação</div>
+      <div class="field">
+        <label>Código de Verificação <span class="req">*</span></label>
+        <input type="text" id="verificationCode" placeholder="123456" maxlength="6"
+               style="letter-spacing:0.35em;font-size:22px;text-align:center;"
+               oninput="this.value=this.value.replace(/\D/g,'')">
+        <p class="field-hint">6 dígitos ditados na gravação acima</p>
+      </div>
+      <div id="step4Response" class="api-response"></div>
+      <div id="step4Error" class="callout error-box" style="display:none;margin-top:12px;">
+        <span class="callout-icon">⚠️</span><span id="step4ErrorMsg"></span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="goStep(3)">← Voltar</button>
+        <button class="btn btn-primary" id="btnConfirmCode" onclick="confirmVerificationCode()">🔓 Confirmar Código</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 5 ═══ -->
+  <div id="step5" style="display:none">
+    <div class="card-header">
+      <div class="card-icon">🎉</div>
+      <div class="card-header-text"><h2>Verificação Concluída</h2><p>Sender verificado com sucesso</p></div>
+    </div>
+    <div class="card-body">
+      <div class="success-screen">
+        <div class="success-icon">🎉</div>
+        <h2>Número ativado com sucesso!</h2>
+        <p style="margin-top:8px;">O status do sender deve mudar para <strong style="color:var(--green)">Approved</strong> em instantes.</p>
+      </div>
+      <hr class="divider">
+      <div class="section-title">Verificar no painel</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--green);color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">1</div>
+          <p style="font-size:13px;color:var(--text-dim);">Acesse <strong style="color:var(--text-mid)">Messaging → Senders → WhatsApp Senders</strong> no Console da Twilio.</p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--green);color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">2</div>
+          <p style="font-size:13px;color:var(--text-dim);">Aguarde ~30 segundos e confirme que o status mudou de <strong style="color:var(--red)">Offline</strong> para <strong style="color:var(--green)">Approved</strong>.</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:24px;">
+        <span class="status-badge badge-offline">Offline</span>
+        <span style="color:var(--text-dim);font-size:18px;">→</span>
+        <span class="status-badge badge-approved">Approved</span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="resetAll()">↺ Verificar outro número</button>
+        <a href="https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders" target="_blank" style="text-decoration:none;">
+          <button class="btn btn-success">Abrir Painel Twilio ↗</button>
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════════════════════
+const S = { accountSid:'', authToken:'', waNumber:'', senderName:'' };
+let currentStep = 1;
+let recordingPollInterval = null;
+let timerInterval = null;
+let pollSeconds = 0;
+const TOTAL_STEPS = 5;
+
+// ── Carrega URL pública do servidor ──────────────────────────────────────────
+async function loadServerInfo() {
+  try {
+    const res  = await fetch('/api/server-info');
+    const data = await res.json();
+    if (data.publicUrl) {
+      document.getElementById('serverUrlDisplay').textContent = data.publicUrl;
+    }
+  } catch(e) {}
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+function sanitizePhone(n) { return n.replace(/[\s\-(). ]/g,''); }
+function isValidE164(n)   { return /^\+[1-9]\d{7,14}$/.test(n); }
+function formatWaNumber(input) {
+  let v = input.value.replace(/[^\d+]/g,'');
+  if (v && !v.startsWith('+')) v = '+' + v;
+  input.value = v;
+}
+function togglePass(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+function showError(boxId, msgId, msg) {
+  document.getElementById(msgId).textContent = msg;
+  document.getElementById(boxId).style.display = 'flex';
+}
+function hideError(id) { document.getElementById(id).style.display = 'none'; }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════════════════════════════
+function updateProgress(step) {
+  for (let i = 0; i < TOTAL_STEPS; i++) {
+    const dot  = document.getElementById('sd' + i);
+    const wrap = document.getElementById('sw' + i);
+    dot.className  = 'step-dot';
+    wrap.className = 'step-dot-wrap';
+    dot.textContent = i + 1;
+    if (i + 1 < step)  { dot.className = 'step-dot done';   wrap.className = 'step-dot-wrap done';   dot.textContent = ''; }
+    if (i + 1 === step){ dot.className = 'step-dot active'; wrap.className = 'step-dot-wrap active'; }
+  }
+  document.getElementById('progressLine').style.width = ((step-1)/(TOTAL_STEPS-1)*100) + '%';
+}
+function goStep(n) {
+  if (currentStep === 4) stopRecordingPoll();
+  document.getElementById('step' + currentStep).style.display = 'none';
+  currentStep = n;
+  document.getElementById('step' + currentStep).style.display = 'block';
+  updateProgress(currentStep);
+  document.getElementById('mainCard').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  if (n === 4) startRecordingPoll();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  STEP 1 → 2
+// ══════════════════════════════════════════════════════════════════════════════
+function goStep2() {
+  hideError('step1Error');
+  const sid   = document.getElementById('accountSid').value.trim();
+  const token = document.getElementById('authToken').value.trim();
+  const wa    = sanitizePhone(document.getElementById('waNumber').value.trim());
+  const name  = document.getElementById('senderName').value.trim();
+
+  if (!sid || !sid.startsWith('AC') || sid.length < 34)
+    return showError('step1Error','step1ErrorMsg','Account SID inválido. Deve começar com "AC" e ter 34 caracteres.');
+  if (!token || token.length < 20)
+    return showError('step1Error','step1ErrorMsg','Auth Token parece inválido. Verifique no painel da Twilio.');
+  if (!wa || !isValidE164(wa))
+    return showError('step1Error','step1ErrorMsg','Número inválido. Use formato E.164, ex: +5511999999999');
+  if (!name || name.length < 3)
+    return showError('step1Error','step1ErrorMsg','Informe o nome do sender (mínimo 3 caracteres).');
+
+  document.getElementById('waNumber').value = wa;
+  S.accountSid = sid; S.authToken = token; S.waNumber = wa; S.senderName = name;
+  document.getElementById('waNumDisplay2').textContent = wa;
+  document.getElementById('prevWa').textContent   = wa;
+  document.getElementById('prevName').textContent = name;
+
+  document.getElementById('webhookConfiguring').style.display = 'flex';
+  document.getElementById('webhookSuccess').style.display     = 'none';
+  document.getElementById('webhookError').style.display       = 'none';
+  document.getElementById('btnRetryWebhook').style.display    = 'none';
+  document.getElementById('btnNextStep3').disabled            = true;
+
+  goStep(2);
+  configureWebhook();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  STEP 2: Webhook
+// ══════════════════════════════════════════════════════════════════════════════
+async function configureWebhook() {
+  document.getElementById('webhookConfiguring').style.display = 'flex';
+  document.getElementById('webhookSuccess').style.display     = 'none';
+  document.getElementById('webhookError').style.display       = 'none';
+  document.getElementById('btnRetryWebhook').style.display    = 'none';
+  document.getElementById('btnNextStep3').disabled            = true;
+
+  try {
+    const res  = await fetch('/api/setup-webhook', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ accountSid:S.accountSid, authToken:S.authToken, phoneNumber:S.waNumber })
+    });
+    const data = await res.json();
+    document.getElementById('webhookConfiguring').style.display = 'none';
+
+    if (res.ok && data.success) {
+      document.getElementById('webhookUrlDisplay').textContent = data.webhookUrl;
+      document.getElementById('webhookSuccess').style.display  = 'flex';
+      document.getElementById('btnNextStep3').disabled         = false;
+    } else {
+      document.getElementById('webhookErrorMsg').textContent = (data.error || 'Erro desconhecido') + (data.hint ? ' ' + data.hint : '');
+      document.getElementById('webhookError').style.display  = 'flex';
+      document.getElementById('btnRetryWebhook').style.display = 'inline-flex';
+    }
+  } catch (err) {
+    document.getElementById('webhookConfiguring').style.display = 'none';
+    document.getElementById('webhookErrorMsg').textContent = 'Erro de conexão: ' + err.message;
+    document.getElementById('webhookError').style.display  = 'flex';
+    document.getElementById('btnRetryWebhook').style.display = 'inline-flex';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  STEP 3: Solicitar verificação
+// ══════════════════════════════════════════════════════════════════════════════
+async function sendVerificationRequest() {
+  const btn    = document.getElementById('btnSendRequest');
+  const respEl = document.getElementById('step3Response');
+  hideError('step3Error');
+  respEl.classList.remove('visible','error-response');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Enviando...';
+
+  try {
+    const res  = await fetch('/api/request-verification', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ accountSid:S.accountSid, authToken:S.authToken, waNumber:S.waNumber, senderName:S.senderName })
+    });
+    const data = await res.json();
+    respEl.textContent = JSON.stringify(data, null, 2);
+
+    if (res.ok) {
+      respEl.classList.add('visible');
+      btn.innerHTML = '✅ Solicitação enviada!';
+      btn.className = 'btn btn-success';
+      if (data.sid) document.getElementById('xeCode').value = data.sid;
+      setTimeout(() => goStep(4), 1400);
+    } else {
+      respEl.classList.add('visible','error-response');
+      btn.disabled  = false;
+      btn.innerHTML = '📞 Tentar novamente';
+      let msg = `Erro ${res.status}: `;
+      if (data.code === 63100) msg += `Validação falhou (63100). Número: "whatsapp:${S.waNumber}"`;
+      else if (res.status === 401) msg += 'Credenciais inválidas.';
+      else msg += data.message || 'Verifique as credenciais e o número.';
+      showError('step3Error','step3ErrorMsg', msg);
+    }
+  } catch (err) {
+    btn.disabled  = false;
+    btn.innerHTML = '📞 Tentar novamente';
+    showError('step3Error','step3ErrorMsg','Erro de conexão: ' + err.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  STEP 4: Polling de gravações
+// ══════════════════════════════════════════════════════════════════════════════
+function startRecordingPoll() {
+  pollSeconds = 0;
+  document.getElementById('pollTimer').textContent = '0s';
+  document.getElementById('recordingWaiting').style.display = 'flex';
+  document.getElementById('recordingsContainer').innerHTML  = '';
+  document.getElementById('noRecordingWarning').style.display = 'none';
+
+  timerInterval = setInterval(() => {
+    pollSeconds++;
+    document.getElementById('pollTimer').textContent = pollSeconds + 's';
+    if (pollSeconds === 90) document.getElementById('noRecordingWarning').style.display = 'flex';
+  }, 1000);
+
+  recordingPollInterval = setInterval(fetchRecordings, 3000);
+  fetchRecordings();
+}
+function stopRecordingPoll() {
+  clearInterval(recordingPollInterval);
+  clearInterval(timerInterval);
+}
+async function fetchRecordings() {
+  try {
+    const res  = await fetch('/api/recordings');
+    const recs = await res.json();
+    if (recs.length > 0) renderRecordings(recs);
+  } catch(e) {}
+}
+function renderRecordings(recordings) {
+  document.getElementById('recordingWaiting').style.display = 'none';
+  document.getElementById('recordingsContainer').innerHTML = recordings.map((rec, i) => {
+    const src  = `/api/recording-audio?sid=${encodeURIComponent(rec.sid)}&as=${encodeURIComponent(S.accountSid)}&at=${encodeURIComponent(S.authToken)}`;
+    const time = new Date(rec.createdAt).toLocaleTimeString('pt-BR');
+    const lbl  = i === 0 ? '🎙 Gravação mais recente' : `🎙 Gravação ${i+1}`;
+    return `<div class="recording-player">
+      <div class="recording-player-header">
+        <span class="recording-label">${lbl}</span>
+        <span class="recording-meta">${rec.duration}s · ${time}</span>
+      </div>
+      <audio controls preload="none"><source src="${src}" type="audio/mpeg"></audio>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  STEP 4: Confirmar código
+// ══════════════════════════════════════════════════════════════════════════════
+async function confirmVerificationCode() {
+  const btn    = document.getElementById('btnConfirmCode');
+  const respEl = document.getElementById('step4Response');
+  hideError('step4Error');
+  respEl.classList.remove('visible','error-response');
+
+  const xe   = document.getElementById('xeCode').value.trim();
+  const code = document.getElementById('verificationCode').value.trim();
+
+  if (!xe || !xe.startsWith('XE'))
+    return showError('step4Error','step4ErrorMsg','Código XE inválido. Deve começar com "XE".');
+  if (!code || code.length !== 6 || isNaN(code))
+    return showError('step4Error','step4ErrorMsg','O código deve ter exatamente 6 dígitos numéricos.');
+
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spinner"></span> Confirmando...';
+
+  try {
+    const res  = await fetch('/api/confirm-verification', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ accountSid:S.accountSid, authToken:S.authToken, xeCode:xe, verificationCode:code })
+    });
+    const data = await res.json();
+    respEl.textContent = JSON.stringify(data, null, 2);
+
+    if (res.status === 202 || res.ok) {
+      respEl.classList.add('visible');
+      btn.innerHTML = '✅ Código confirmado!';
+      btn.className = 'btn btn-success';
+      stopRecordingPoll();
+      setTimeout(() => goStep(5), 1400);
+    } else {
+      respEl.classList.add('visible','error-response');
+      btn.disabled  = false;
+      btn.innerHTML = '🔓 Tentar novamente';
+      let msg = `Erro ${res.status}: `;
+      if (res.status === 401) msg += 'Credenciais inválidas.';
+      else if (res.status === 404) msg += 'Código XE não encontrado.';
+      else msg += data.message || 'Verifique o código XE e o código de verificação.';
+      showError('step4Error','step4ErrorMsg', msg);
+    }
+  } catch (err) {
+    btn.disabled  = false;
+    btn.innerHTML = '🔓 Tentar novamente';
+    showError('step4Error','step4ErrorMsg','Erro de conexão: ' + err.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  RESET
+// ══════════════════════════════════════════════════════════════════════════════
+function resetAll() {
+  stopRecordingPoll();
+  ['accountSid','authToken','waNumber','senderName','xeCode','verificationCode']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('btnSendRequest').innerHTML = '📞 Enviar Solicitação';
+  document.getElementById('btnSendRequest').disabled  = false;
+  document.getElementById('btnSendRequest').className = 'btn btn-primary';
+  document.getElementById('btnConfirmCode').innerHTML = '🔓 Confirmar Código';
+  document.getElementById('btnConfirmCode').disabled  = false;
+  document.getElementById('btnConfirmCode').className = 'btn btn-primary';
+  document.getElementById('step3Response').classList.remove('visible');
+  document.getElementById('step4Response').classList.remove('visible');
+  document.getElementById('recordingsContainer').innerHTML = '';
+  goStep(1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════════════════
+updateProgress(1);
+loadServerInfo();
+</script>
+</body>
+</html>

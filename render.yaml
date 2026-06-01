@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: twilio-wa-verificacao
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Senha de acesso ao app (TROQUE antes de deployar) ──
+      - key: APP_PASSWORD
+        value: trocar123
+
+      # ── Segredo da sessão (gere uma string aleatória longa) ──
+      - key: SESSION_SECRET
+        generateValue: true
+
+      # ── Render injeta automaticamente — não altere ──
+      - key: RENDER_EXTERNAL_URL
+        fromService:
+          type: web
+          name: twilio-wa-verificacao
+          property: host
